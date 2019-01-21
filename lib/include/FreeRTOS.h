@@ -1165,6 +1165,21 @@ typedef struct xSTATIC_STREAM_BUFFER
 /* Message buffers are built on stream buffers. */
 typedef StaticStreamBuffer_t StaticMessageBuffer_t;
 
+#if defined(_MSC_VER)
+	#define FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__) || defined(__MINGW32__) || defined(__MINGW64__)
+	#define FORCE_INLINE __attribute__((always_inline))
+#else
+	#pragma message("Warning: not forcing inline. Please add the correct force inline directive for your compiler to FreeRTOS.h")
+	#define FORCE_INLINE inline
+#endif
+
+typedef enum xLOOP_ACTION
+{
+	LOOP_CONTINUE,
+	LOOP_BREAK
+} LoopAction_t;
+
 #ifdef __cplusplus
 }
 #endif

@@ -232,14 +232,7 @@ static void prvCheckOptions( FreeRTOS_Socket_t *pxSocket, NetworkBufferDescripto
  * comprehension and enable separate property-checking for the loop body and the
  * rest of the function.
  */
-static FORCE_INLINE LoopAction_t prvCheckOptions_outerLoop( const unsigned char ** const pucPtr, const unsigned char ** const pucLast, UBaseType_t *uxNewMSS, FreeRTOS_Socket_t ** const pxSocket, TCPWindow_t ** const pxTCPWindow);
-
-/*
- * The body of the inner loop in prvCheckOptions, factored out to aid code
- * comprehension and enable separate property-checking for the loop body and the
- * rest of the function.
- */
-static FORCE_INLINE void prvCheckOptions_innerLoop( const unsigned char ** const pucPtr, FreeRTOS_Socket_t ** const pxSocket, unsigned char * const pucLen);
+static FORCE_INLINE LoopAction_t prvCheckOptions_outerLoop( const unsigned char ** const pucPtr, const unsigned char ** const pucLast, FreeRTOS_Socket_t ** const pxSocket, TCPWindow_t ** const pxTCPWindow);
 
 /*
  * The body of the inner loop in prvCheckOptions, factored out to aid code
@@ -1161,7 +1154,6 @@ TCPHeader_t * pxTCPHeader;
 const unsigned char *pucPtr;
 const unsigned char *pucLast;
 TCPWindow_t *pxTCPWindow;
-UBaseType_t uxNewMSS;
 LoopAction_t xLoopAction;
 
 	pxTCPPacket = ( TCPPacket_t * ) ( pxNetworkBuffer->pucEthernetBuffer );
@@ -1183,14 +1175,15 @@ LoopAction_t xLoopAction;
 	xLoopAction = LOOP_CONTINUE;
 	while( ( pucPtr < pucLast ) && ( xLoopAction == LOOP_CONTINUE ) )
 	{
-		xLoopAction = prvCheckOptions_outerLoop( &pucPtr, &pucLast, &uxNewMSS, &pxSocket, &pxTCPWindow );
+		xLoopAction = prvCheckOptions_outerLoop( &pucPtr, &pucLast, &pxSocket, &pxTCPWindow );
 	}
 }
 
 /*-----------------------------------------------------------*/
 
-static FORCE_INLINE LoopAction_t prvCheckOptions_outerLoop( const unsigned char ** const pucPtr, const unsigned char ** const pucLast, UBaseType_t *uxNewMSS, FreeRTOS_Socket_t ** const pxSocket, TCPWindow_t ** const pxTCPWindow)
+static FORCE_INLINE LoopAction_t prvCheckOptions_outerLoop( const unsigned char ** const pucPtr, const unsigned char ** const pucLast, FreeRTOS_Socket_t ** const pxSocket, TCPWindow_t ** const pxTCPWindow)
 {
+UBaseType_t uxNewMSS;
 UBaseType_t xRemainingOptionsBytes = ( *pucLast ) - ( *pucPtr );
 
 	if( ( *pucPtr )[ 0 ] == TCP_OPT_END )
@@ -1236,35 +1229,35 @@ UBaseType_t xRemainingOptionsBytes = ( *pucLast ) - ( *pucPtr );
 		/* An MSS option with the correct option length.  FreeRTOS_htons()
 		is not needed here because usChar2u16() already returns a host
 		endian number. */
-		( *uxNewMSS ) = usChar2u16( ( *pucPtr ) + 2 );
+		uxNewMSS = usChar2u16( ( *pucPtr ) + 2 );
 
-		if( ( *pxSocket )->u.xTCP.usInitMSS != ( *uxNewMSS ) )
+		if( ( *pxSocket )->u.xTCP.usInitMSS != uxNewMSS )
 		{
 			/* Perform a basic check on the the new MSS. */
-			if( ( *uxNewMSS ) == 0 )
+			if( uxNewMSS == 0 )
 			{
 				return LOOP_BREAK;
 			}
 
-			FreeRTOS_debug_printf( ( "MSS change %u -> %lu\n", ( *pxSocket )->u.xTCP.usInitMSS, ( *uxNewMSS ) ) );
+			FreeRTOS_debug_printf( ( "MSS change %u -> %lu\n", ( *pxSocket )->u.xTCP.usInitMSS, uxNewMSS ) );
 		}
 
-		if( ( *pxSocket )->u.xTCP.usInitMSS > ( *uxNewMSS ) )
+		if( ( *pxSocket )->u.xTCP.usInitMSS > uxNewMSS )
 		{
 			/* our MSS was bigger than the MSS of the other party: adapt it. */
 			( *pxSocket )->u.xTCP.bits.bMssChange = pdTRUE_UNSIGNED;
-			if( ( ( *pxTCPWindow ) != NULL ) && ( ( *pxSocket )->u.xTCP.usCurMSS > ( *uxNewMSS ) ) )
+			if( ( ( *pxTCPWindow ) != NULL ) && ( ( *pxSocket )->u.xTCP.usCurMSS > uxNewMSS ) )
 			{
 				/* The peer advertises a smaller MSS than this socket was
 				using.  Use that as well. */
-				FreeRTOS_debug_printf( ( "Change mss %d => %lu\n", ( *pxSocket )->u.xTCP.usCurMSS, ( *uxNewMSS ) ) );
-				( *pxSocket )->u.xTCP.usCurMSS = ( uint16_t ) ( *uxNewMSS );
+				FreeRTOS_debug_printf( ( "Change mss %d => %lu\n", ( *pxSocket )->u.xTCP.usCurMSS, uxNewMSS ) );
+				( *pxSocket )->u.xTCP.usCurMSS = ( uint16_t ) uxNewMSS;
 			}
-			( *pxTCPWindow )->xSize.ulRxWindowLength = ( ( uint32_t ) ( *uxNewMSS ) ) * ( ( *pxTCPWindow )->xSize.ulRxWindowLength / ( ( uint32_t ) ( *uxNewMSS ) ) );
-			( *pxTCPWindow )->usMSSInit = ( uint16_t ) ( *uxNewMSS );
-			( *pxTCPWindow )->usMSS = ( uint16_t ) ( *uxNewMSS );
-			( *pxSocket )->u.xTCP.usInitMSS = ( uint16_t ) ( *uxNewMSS );
-			( *pxSocket )->u.xTCP.usCurMSS = ( uint16_t ) ( *uxNewMSS );
+			( *pxTCPWindow )->xSize.ulRxWindowLength = ( ( uint32_t ) uxNewMSS ) * ( ( *pxTCPWindow )->xSize.ulRxWindowLength / ( ( uint32_t ) uxNewMSS ) );
+			( *pxTCPWindow )->usMSSInit = ( uint16_t ) uxNewMSS;
+			( *pxTCPWindow )->usMSS = ( uint16_t ) uxNewMSS;
+			( *pxSocket )->u.xTCP.usInitMSS = ( uint16_t ) uxNewMSS;
+			( *pxSocket )->u.xTCP.usCurMSS = ( uint16_t ) uxNewMSS;
 		}
 
 		#if( ipconfigUSE_TCP_WIN != 1 )
